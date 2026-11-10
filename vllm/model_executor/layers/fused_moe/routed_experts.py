@@ -1028,6 +1028,11 @@ class RoutedExperts(PluggableLayer):
     ) -> Iterable[str]:
         expert_mapping = self.get_expert_mapping(include_fused=True)
         mapping_by_expert = _index_expert_mapping(expert_mapping)
+        num_logical_experts = self.moe_config.num_logical_experts
+        num_redundant_experts = self.moe_config.num_experts - num_logical_experts
+        physical_to_logical = EplbState.build_initial_global_physical_to_logical_map(
+            num_logical_experts, num_redundant_experts
+        )
 
         for expert_name, loaded_weight in weights:
             qual_name = f"{self.layer_name}.{expert_name}"
@@ -1111,6 +1116,16 @@ class RoutedExperts(PluggableLayer):
 
                 # Unified loading logic for fused and non-fused experts
                 loaded_experts = experts_shard.unbind()
+                if (
+                    is_fused
+                    and num_redundant_experts
+                    and len(loaded_experts) == num_logical_experts
+                ):
+                    # Fused tensors hold logical experts only; list them in
+                    # physical order so redundant EPLB slots get their replicas.
+                    loaded_experts = tuple(
+                        loaded_experts[logical_id] for logical_id in physical_to_logical
+                    )
                 for expert_id, loaded_expert in enumerate(loaded_experts, start=start):
                     success = param.weight_loader(
                         param=param,

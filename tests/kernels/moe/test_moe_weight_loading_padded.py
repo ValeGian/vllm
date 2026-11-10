@@ -14,6 +14,7 @@ from types import SimpleNamespace
 import pytest
 import torch
 
+from vllm.distributed.eplb.eplb_state import EplbState
 from vllm.model_executor.layers.fused_moe.oracle.unquantized import (
     UnquantizedMoeBackend,
 )
@@ -571,11 +572,16 @@ class TestLoadWeightsExpertMapping:
         quant_method="tensor",
         layer_name="model.layers.0.mlp.experts",
         is_gated=True,
+        num_redundant_experts=0,
     ):
         experts = torch.nn.Module()
         experts.layer_name = layer_name
         experts.shared_expert_online_loader = None
-        experts.moe_config = SimpleNamespace(is_act_and_mul=is_gated)
+        experts.moe_config = SimpleNamespace(
+            is_act_and_mul=is_gated,
+            num_logical_experts=16,
+            num_experts=16 + num_redundant_experts,
+        )
         experts.get_expert_mapping = lambda **_: mapping
         experts.is_fused_checkpoint_transposed = transposed
         experts._orient_fused_weight = RoutedExperts._orient_fused_weight
@@ -748,6 +754,25 @@ class TestLoadWeightsExpertMapping:
         expected += [weight[10, :2]]
         for call, tensor in zip(calls, expected):
             torch.testing.assert_close(call[3], tensor, rtol=0, atol=0)
+
+    def test_fused_weights_fill_redundant_physical_experts(self):
+        """A fused tensor holds the logical experts only; every redundant EPLB
+        slot must get the replica that EPLB's initial placement puts there."""
+        weight = torch.arange(192).reshape(16, 4, 3)
+        calls = self._load(
+            self._mapping(num_redundant_experts=4),
+            [("gate_up_proj", weight), ("down_proj", weight)],
+            num_redundant_experts=4,
+        )
+        loaded = {(shard, expert): tensor for _, shard, expert, tensor in calls}
+        assert len(loaded) == len(calls) == 3 * 20
+        expected = dict(zip(("w1", "w3"), weight.chunk(2, dim=1)), w2=weight)
+        placement = EplbState.build_initial_global_physical_to_logical_map(16, 4)
+        for shard, experts in expected.items():
+            for physical_id, logical_id in enumerate(placement):
+                torch.testing.assert_close(
+                    loaded[shard, physical_id], experts[logical_id], rtol=0, atol=0
+                )
 
     def test_fused_weights_stop_after_first_matching_run(self):
         mapping = self._mapping()

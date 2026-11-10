@@ -74,6 +74,7 @@ steps:
   source_file_dependencies:
   - vllm/model_executor/model_loader/default_loader.py
   - vllm/model_executor/model_loader/ep_weight_filter.py
+  - vllm/model_executor/layers/fused_moe/routed_experts.py
   - vllm/distributed/eplb
   - tests/model_executor/model_loader/test_ep_weight_filter_eplb.py
   commands:
@@ -90,6 +91,7 @@ steps:
       source_file_dependencies:
       - vllm/model_executor/model_loader/default_loader.py
       - vllm/model_executor/model_loader/ep_weight_filter.py
+      - vllm/model_executor/layers/fused_moe/routed_experts.py
       - vllm/distributed/eplb
       - tests/model_executor/model_loader/test_ep_weight_filter_eplb.py
       - vllm/platforms/rocm.py
