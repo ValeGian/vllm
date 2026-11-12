@@ -389,6 +389,23 @@ _TEXT_GENERATION_EXAMPLE_MODELS = {
         "Aleph-Alpha/Kolibri-1", min_transformers_version="5.20.0"
     ),
     "LagunaForCausalLM": _HfExamplesInfo("poolside/Laguna-XS.2"),
+    "LaraMiniForCausalLM": _HfExamplesInfo(
+        "translated/Lara-4-Mini-Base",
+        trust_remote_code=True,
+        revision="00bcc099d6301670df6af9a08a08950442015ed5",
+        use_original_num_layers=True,
+        # One period of the layer pattern: GDN, sliding, GDN, global, sliding
+        hf_overrides={
+            "num_hidden_layers": 5,
+            "layer_types": [
+                "linear_attention",
+                "sliding_attention",
+                "linear_attention",
+                "full_attention",
+                "sliding_attention",
+            ],
+        },
+    ),
     "Lfm2ForCausalLM": _HfExamplesInfo("LiquidAI/LFM2-1.2B"),
     "Lfm2MoeForCausalLM": _HfExamplesInfo(
         "LiquidAI/LFM2-8B-A1B",
